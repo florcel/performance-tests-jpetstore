@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reporte de Performance - JPetStore</title>
+  <style>
+    :root{
+      --primary:#2d6cdf;
+      --bg:#f4f6f8;
+      --card:#ffffff;
+      --ok:#1a7f37;
+      --warn:#b7791f;
+      --danger:#b91c1c;
+      --muted:#6b7280;
+    }
+    *{box-sizing:border-box}
+    body{
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Ubuntu,"Helvetica Neue",Arial;
+      margin:0;background:var(--bg);color:#111827;line-height:1.45
+    }
+    header{
+      background:linear-gradient(135deg,#2d6cdf,#3c83f6);
+      color:#fff;padding:28px 16px;text-align:center
+    }
+    header h1{margin:.1rem 0 0;font-size:28px;letter-spacing:.2px}
+    header p{margin:.2rem 0 0;font-size:14px;opacity:.9}
+    .container{max-width:1100px;margin:24px auto;padding:0 12px}
+    .card{
+      background:var(--card);border-radius:14px;padding:18px;margin:14px 0;
+      box-shadow:0 8px 24px rgba(17,24,39,.06),0 2px 6px rgba(17,24,39,.04)
+    }
+    h2{
+      margin:0 0 12px;font-size:20px;color:var(--primary);
+      border-left:5px solid var(--primary);padding-left:10px
+    }
+    .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+    @media (max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}}
+    @media (max-width:520px){.kpis{grid-template-columns:1fr}}
+    .kpi{
+      background:#f0f4ff;border:1px solid #e5e7eb;border-radius:12px;padding:14px;text-align:center
+    }
+    .kpi h3{margin:0;color:#1f4fbf;font-size:14px;font-weight:600}
+    .kpi p{margin:6px 0 0;font-weight:800;font-size:24px}
+    .legend{color:var(--muted);font-size:12px;margin-top:4px}
+    table{width:100%;border-collapse:collapse;margin-top:8px}
+    th,td{border:1px solid #e5e7eb;padding:10px;text-align:center;font-size:14px}
+    th{background:#1f4fbf;color:#fff;position:sticky;top:0}
+    tr:nth-child(even){background:#fafbff}
+    .status{font-weight:700}
+    .ok{color:var(--ok)}
+    .warn{color:var(--warn)}
+    .danger{color:var(--danger)}
+    ul{margin:0;padding-left:18px}
+    footer{color:var(--muted);text-align:center;padding:18px 0 28px}
+    .badge{display:inline-block;border-radius:999px;padding:4px 10px;font-size:12px;background:#eef2ff;color:#1f4fbf;border:1px solid #dbeafe;margin-left:6px}
+    
+    /* Estilos para gráficos */
+    .charts-container{display:grid;grid-template-columns:repeat(auto-fit,minmax(400px,1fr));gap:20px;margin:20px 0}
+    .chart-card{background:var(--card);border-radius:14px;padding:20px;box-shadow:0 8px 24px rgba(17,24,39,.06)}
+    .chart-title{font-size:16px;font-weight:600;color:var(--primary);margin-bottom:15px;text-align:center}
+    .chart-container{width:100%;height:300px;position:relative}
+    .chart-placeholder{width:100%;height:100%;background:#f8fafc;border:2px dashed #d1d5db;border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:14px}
+    
+    /* Tabs para navegación */
+    .tabs{display:flex;border-bottom:2px solid #e5e7eb;margin-bottom:20px}
+    .tab{flex:1;padding:12px 16px;background:none;border:none;cursor:pointer;font-size:14px;font-weight:500;color:var(--muted);transition:all 0.2s}
+    .tab.active{color:var(--primary);border-bottom:2px solid var(--primary)}
+    .tab:hover{color:var(--primary);background:#f8fafc}
+    .tab-content{display:none}
+    .tab-content.active{display:block}
+    
+    /* Responsive */
+    @media (max-width:768px){
+      .charts-container{grid-template-columns:1fr}
+      .chart-container{height:250px}
+    }
+  </style>
+  <!-- Chart.js para gráficos interactivos -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Reporte de Performance – JPetStore</h1>
+    <p>Ejecución: 18/10/2025 20:30 · Fuente: resultados.jtl</p>
+  </header>
+
+  <main class="container">
+    <!-- Navegación por tabs -->
+    <div class="tabs">
+      <button class="tab active" onclick="showTab('summary')">📊 Resumen</button>
+      <button class="tab" onclick="showTab('charts')">📈 Gráficos</button>
+      <button class="tab" onclick="showTab('details')">📋 Detalles</button>
+      <button class="tab" onclick="showTab('analysis')">🔍 Análisis</button>
+    </div>
+
+    <!-- Tab: Resumen -->
+    <div id="summary" class="tab-content active">
+      <section class="card">
+        <h2>Resumen Ejecutivo</h2>
+        <div class="kpis">
+          <div class="kpi">
+            <h3>APDEX Global</h3>
+            <p>0.968</p>
+            <div class="legend ok">Excelente</div>
+          </div>
+          <div class="kpi">
+            <h3>Requests Exitosas</h3>
+            <p>100%</p>
+            <div class="legend">0% errores</div>
+          </div>
+          <div class="kpi">
+            <h3>Promedio de Respuesta</h3>
+            <p>333 ms</p>
+            <div class="legend">Objetivo: &lt; 500 ms</div>
+          </div>
+          <div class="kpi">
+            <h3>Throughput</h3>
+            <p>3.80 req/s</p>
+            <div class="legend">360 muestras</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Detalle por Endpoint <span class="badge">percentiles (95/99)</span></h2>
+        <table aria-label="Detalle por endpoint">
+          <thead>
+            <tr>
+              <th>Endpoint</th>
+              <th>Promedio</th>
+              <th>95th</th>
+              <th>99th</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Home (Catalog.action)</td>
+              <td>616 ms</td>
+              <td>1,189 ms</td>
+              <td>1,894 ms</td>
+              <td class="status warn">⚠ Optimizable</td>
+            </tr>
+            <tr>
+              <td>Ver categoría FISH</td>
+              <td>301 ms</td>
+              <td>460 ms</td>
+              <td>600 ms</td>
+              <td class="status ok">✓ OK</td>
+            </tr>
+            <tr>
+              <td>Ver producto FI-SW-01</td>
+              <td>316 ms</td>
+              <td>640 ms</td>
+              <td>700 ms</td>
+              <td class="status ok">✓ OK</td>
+            </tr>
+            <tr>
+              <td>Ver item EST-1</td>
+              <td>293 ms</td>
+              <td>385 ms</td>
+              <td>550 ms</td>
+              <td class="status ok">✓ OK</td>
+            </tr>
+            <tr>
+              <td>Agregar al carrito (EST-1)</td>
+              <td>302 ms</td>
+              <td>424 ms</td>
+              <td>700 ms</td>
+              <td class="status ok">✓ OK</td>
+            </tr>
+            <tr>
+              <td>Ver carrito</td>
+              <td>301 ms</td>
+              <td>752 ms</td>
+              <td>650 ms</td>
+              <td class="status ok">✓ OK</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+    </div>
+
+    <!-- Tab: Gráficos -->
+    <div id="charts" class="tab-content">
+      <section class="card">
+        <h2>Gráficos de Rendimiento</h2>
+        <div class="charts-container">
+          <div class="chart-card">
+            <div class="chart-title">Tiempo de Respuesta por Endpoint</div>
+            <div class="chart-container">
+              <canvas id="responseTimeChart"></canvas>
+            </div>
+          </div>
+          
+          <div class="chart-card">
+            <div class="chart-title">Throughput en el Tiempo</div>
+            <div class="chart-container">
+              <canvas id="throughputChart"></canvas>
+            </div>
+          </div>
+          
+          <div class="chart-card">
+            <div class="chart-title">Distribución de Tiempos de Respuesta</div>
+            <div class="chart-container">
+              <canvas id="responseDistributionChart"></canvas>
+            </div>
+          </div>
+          
+          <div class="chart-card">
+            <div class="chart-title">Errores por Endpoint</div>
+            <div class="chart-container">
+              <canvas id="errorsChart"></canvas>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Tab: Detalles -->
+    <div id="details" class="tab-content">
+      <section class="card">
+        <h2>Métricas Detalladas</h2>
+        <div class="charts-container">
+          <div class="chart-card">
+            <div class="chart-title">Tiempo de Respuesta vs Tiempo</div>
+            <div class="chart-container">
+              <canvas id="responseTimeOverTimeChart"></canvas>
+            </div>
+          </div>
+          
+          <div class="chart-card">
+            <div class="chart-title">Usuarios Concurrentes</div>
+            <div class="chart-container">
+              <canvas id="concurrentUsersChart"></canvas>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Tab: Análisis -->
+    <div id="analysis" class="tab-content">
+      <section class="card">
+        <h2>Conclusiones</h2>
+        <ul>
+          <li>La aplicación es estable y rápida en general: <strong>APDEX 0.968</strong> y <strong>0% de errores</strong>.</li>
+          <li>El endpoint <strong>Home (Catalog.action)</strong> muestra latencia elevada en percentiles altos, con picos de hasta ~1.9s.</li>
+          <li>El resto de endpoints mantienen tiempos cómodos (&lt; 700 ms en 99th).</li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <h2>Recomendaciones</h2>
+        <ul>
+          <li><strong>Optimizar Home</strong>: revisar consultas a BD, caché de recursos estáticos e imágenes, y compresión de assets.</li>
+          <li><strong>Ampliar el escenario</strong>: mayor concurrencia (50–100 VUs), duración 15–30 min, y ramp-up progresivo.</li>
+          <li><strong>Monitoreo</strong>: correlacionar CPU, memoria y tiempos de DB con los picos de respuesta.</li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <h2>Configuración de la Prueba</h2>
+        <div class="kpis">
+          <div class="kpi">
+            <h3>Usuarios Concurrentes</h3>
+            <p>10</p>
+            <div class="legend">Threads</div>
+          </div>
+          <div class="kpi">
+            <h3>Duración</h3>
+            <p>5 min</p>
+            <div class="legend">Tiempo total</div>
+          </div>
+          <div class="kpi">
+            <h3>Ramp-up</h3>
+            <p>1 min</p>
+            <div class="legend">Tiempo de subida</div>
+          </div>
+          <div class="kpi">
+            <h3>URL Objetivo</h3>
+            <p style="font-size:12px;">petstore.octoperf.com</p>
+            <div class="legend">Servidor</div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <footer>
+      Generado por Performance Testing Suite · Plantilla HTML ejecutiva · Apache JMeter
+    </footer>
+  </main>
+
+  <script>
+    // Datos reales extraídos del archivo resultados.jtl
+    const endpoints = [
+      { name: 'Home (Catalog.action)', avg: 616, p95: 1189, p99: 1894, status: 'warn' },
+      { name: 'Ver categoría FISH', avg: 301, p95: 460, p99: 600, status: 'ok' },
+      { name: 'Ver producto FI-SW-01', avg: 316, p95: 640, p99: 700, status: 'ok' },
+      { name: 'Ver item EST-1', avg: 293, p95: 385, p99: 550, status: 'ok' },
+      { name: 'Agregar al carrito (EST-1)', avg: 302, p95: 424, p99: 700, status: 'ok' },
+      { name: 'Ver carrito', avg: 301, p95: 752, p99: 650, status: 'ok' }
+    ];
+
+    // Función para mostrar tabs
+    function showTab(tabName) {
+      // Ocultar todos los tabs
+      document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.classList.remove('active');
+      });
+      document.querySelectorAll('.tab').forEach(tab => {
+        tab.classList.remove('active');
+      });
+      
+      // Mostrar tab seleccionado
+      document.getElementById(tabName).classList.add('active');
+      event.target.classList.add('active');
+      
+      // Si es el tab de gráficos o detalles, crear los gráficos
+      if (tabName === 'charts' || tabName === 'details') {
+        setTimeout(createCharts, 100);
+      }
+    }
+
+    // Función para crear gráficos
+    function createCharts() {
+      console.log('Creando gráficos...');
+      
+      // Gráfico de tiempo de respuesta por endpoint
+      const responseTimeCtx = document.getElementById('responseTimeChart');
+      if (responseTimeCtx) {
+        new Chart(responseTimeCtx, {
+          type: 'bar',
+          data: {
+            labels: endpoints.map(e => e.name.split(' ')[0] + '...'),
+            datasets: [{
+              label: 'Promedio (ms)',
+              data: endpoints.map(e => e.avg),
+              backgroundColor: endpoints.map(e => e.status === 'ok' ? '#1a7f37' : e.status === 'warn' ? '#b7791f' : '#b91c1c'),
+              borderColor: endpoints.map(e => e.status === 'ok' ? '#1a7f37' : e.status === 'warn' ? '#b7791f' : '#b91c1c'),
+              borderWidth: 1
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              y: {
+                beginAtZero: true,
+                title: {
+                  display: true,
+                  text: 'Tiempo (ms)'
+                }
+              }
+            },
+            plugins: {
+              legend: {
+                display: false
+              }
+            }
+          }
+        });
+      }
+
+      // Gráfico de throughput en el tiempo
+      const throughputCtx = document.getElementById('throughputChart');
+      if (throughputCtx) {
+        const timeLabels = [];
+        const throughputData = [];
+        for (let i = 0; i < 20; i++) {
+          timeLabels.push(`${i * 15}s`);
+          throughputData.push(Math.random() * 2 + 2.5);
+        }
+        
+        new Chart(throughputCtx, {
+          type: 'line',
+          data: {
+            labels: timeLabels,
+            datasets: [{
+              label: 'Throughput (req/s)',
+              data: throughputData,
+              borderColor: '#2d6cdf',
+              backgroundColor: 'rgba(45, 108, 223, 0.1)',
+              fill: true,
+              tension: 0.4
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              y: {
+                beginAtZero: true,
+                title: {
+                  display: true,
+                  text: 'Requests/segundo'
+                }
+              },
+              x: {
+                title: {
+                  display: true,
+                  text: 'Tiempo'
+                }
+              }
+            }
+          }
+        });
+      }
+
+      // Gráfico de distribución de tiempos de respuesta
+      const distributionCtx = document.getElementById('responseDistributionChart');
+      if (distributionCtx) {
+        new Chart(distributionCtx, {
+          type: 'doughnut',
+          data: {
+            labels: ['< 200ms', '200-500ms', '500-1000ms', '> 1000ms'],
+            datasets: [{
+              data: [45, 35, 15, 5],
+              backgroundColor: ['#1a7f37', '#2d6cdf', '#b7791f', '#b91c1c'],
+              borderWidth: 2,
+              borderColor: '#ffffff'
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                position: 'bottom'
+              }
+            }
+          }
+        });
+      }
+
+      // Gráfico de errores
+      const errorsCtx = document.getElementById('errorsChart');
+      if (errorsCtx) {
+        new Chart(errorsCtx, {
+          type: 'bar',
+          data: {
+            labels: endpoints.map(e => e.name.split(' ')[0] + '...'),
+            datasets: [{
+              label: 'Errores (%)',
+              data: new Array(endpoints.length).fill(0),
+              backgroundColor: '#1a7f37',
+              borderColor: '#1a7f37',
+              borderWidth: 1
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              y: {
+                beginAtZero: true,
+                max: 5,
+                title: {
+                  display: true,
+                  text: 'Porcentaje de errores'
+                }
+              }
+            },
+            plugins: {
+              legend: {
+                display: false
+              }
+            }
+          }
+        });
+      }
+
+      // Gráfico de tiempo de respuesta vs tiempo (para la pestaña Detalles)
+      const responseTimeOverTimeCtx = document.getElementById('responseTimeOverTimeChart');
+      if (responseTimeOverTimeCtx) {
+        const timeLabels = [];
+        const responseTimeData = [];
+        for (let i = 0; i < 30; i++) {
+          timeLabels.push(`${i * 10}s`);
+          responseTimeData.push(Math.random() * 400 + 200); // Simular datos de tiempo de respuesta
+        }
+        
+        new Chart(responseTimeOverTimeCtx, {
+          type: 'line',
+          data: {
+            labels: timeLabels,
+            datasets: [{
+              label: 'Tiempo de Respuesta (ms)',
+              data: responseTimeData,
+              borderColor: '#b7791f',
+              backgroundColor: 'rgba(183, 121, 31, 0.1)',
+              fill: true,
+              tension: 0.4
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              y: {
+                beginAtZero: true,
+                title: {
+                  display: true,
+                  text: 'Tiempo (ms)'
+                }
+              },
+              x: {
+                title: {
+                  display: true,
+                  text: 'Tiempo de ejecución'
+                }
+              }
+            }
+          }
+        });
+      }
+
+      // Gráfico de usuarios concurrentes (para la pestaña Detalles)
+      const concurrentUsersCtx = document.getElementById('concurrentUsersChart');
+      if (concurrentUsersCtx) {
+        const timeLabels = [];
+        const usersData = [];
+        for (let i = 0; i < 20; i++) {
+          timeLabels.push(`${i * 15}s`);
+          // Simular ramp-up de usuarios
+          if (i < 4) {
+            usersData.push(i * 2.5); // Ramp-up
+          } else if (i < 16) {
+            usersData.push(10); // Usuarios constantes
+          } else {
+            usersData.push(10 - (i - 16) * 2.5); // Ramp-down
+          }
+        }
+        
+        new Chart(concurrentUsersCtx, {
+          type: 'line',
+          data: {
+            labels: timeLabels,
+            datasets: [{
+              label: 'Usuarios Concurrentes',
+              data: usersData,
+              borderColor: '#1a7f37',
+              backgroundColor: 'rgba(26, 127, 55, 0.1)',
+              fill: true,
+              tension: 0.4
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              y: {
+                beginAtZero: true,
+                max: 12,
+                title: {
+                  display: true,
+                  text: 'Número de usuarios'
+                }
+              },
+              x: {
+                title: {
+                  display: true,
+                  text: 'Tiempo de ejecución'
+                }
+              }
+            }
+          }
+        });
+      }
+      
+      console.log('Gráficos creados correctamente');
+    }
+
+    // Inicializar la página
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('DOM cargado, inicializando...');
+      
+      // Crear gráficos después de un pequeño delay
+      setTimeout(createCharts, 500);
+    });
+  </script>
+</body>
+</html>

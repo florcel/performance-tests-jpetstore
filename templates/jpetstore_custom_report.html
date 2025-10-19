@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reporte de Performance - JPetStore</title>
+  <style>
+    :root{
+      --primary:#2d6cdf;
+      --bg:#f4f6f8;
+      --card:#ffffff;
+      --ok:#1a7f37;
+      --warn:#b7791f;
+      --danger:#b91c1c;
+      --muted:#6b7280;
+    }
+    *{box-sizing:border-box}
+    body{
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Ubuntu,"Helvetica Neue",Arial;
+      margin:0;background:var(--bg);color:#111827;line-height:1.45
+    }
+    header{
+      background:linear-gradient(135deg,#2d6cdf,#3c83f6);
+      color:#fff;padding:28px 16px;text-align:center
+    }
+    header h1{margin:.1rem 0 0;font-size:28px;letter-spacing:.2px}
+    header p{margin:.2rem 0 0;font-size:14px;opacity:.9}
+    .container{max-width:1100px;margin:24px auto;padding:0 12px}
+    .card{
+      background:var(--card);border-radius:14px;padding:18px;margin:14px 0;
+      box-shadow:0 8px 24px rgba(17,24,39,.06),0 2px 6px rgba(17,24,39,.04)
+    }
+    h2{
+      margin:0 0 12px;font-size:20px;color:var(--primary);
+      border-left:5px solid var(--primary);padding-left:10px
+    }
+    .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+    @media (max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}}
+    @media (max-width:520px){.kpis{grid-template-columns:1fr}}
+    .kpi{
+      background:#f0f4ff;border:1px solid #e5e7eb;border-radius:12px;padding:14px;text-align:center
+    }
+    .kpi h3{margin:0;color:#1f4fbf;font-size:14px;font-weight:600}
+    .kpi p{margin:6px 0 0;font-weight:800;font-size:24px}
+    .legend{color:var(--muted);font-size:12px;margin-top:4px}
+    table{width:100%;border-collapse:collapse;margin-top:8px}
+    th,td{border:1px solid #e5e7eb;padding:10px;text-align:center;font-size:14px}
+    th{background:#1f4fbf;color:#fff;position:sticky;top:0}
+    tr:nth-child(even){background:#fafbff}
+    .status{font-weight:700}
+    .ok{color:var(--ok)}
+    .warn{color:var(--warn)}
+    .danger{color:var(--danger)}
+    ul{margin:0;padding-left:18px}
+    footer{color:var(--muted);text-align:center;padding:18px 0 28px}
+    .badge{display:inline-block;border-radius:999px;padding:4px 10px;font-size:12px;background:#eef2ff;color:#1f4fbf;border:1px solid #dbeafe;margin-left:6px}
+    
+    .charts-container{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:20px;margin:20px 0}
+    .chart-card{background:var(--card);border-radius:14px;padding:20px;box-shadow:0 8px 24px rgba(17,24,39,.06)}
+    .chart-title{font-size:16px;font-weight:600;color:var(--primary);margin-bottom:15px;text-align:center}
+    .chart-container{width:100%;height:300px;position:relative}
+    .chart-placeholder{width:100%;height:100%;background:#f8fafc;border:2px dashed #d1d5db;border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:14px}
+    
+    .tabs{display:flex;border-bottom:2px solid #e5e7eb;margin-bottom:20px}
+    .tab{flex:1;padding:12px 16px;background:none;border:none;cursor:pointer;font-size:14px;font-weight:500;color:var(--muted);transition:all 0.2s}
+    .tab.active{color:var(--primary);border-bottom:2px solid var(--primary)}
+    .tab:hover{color:var(--primary);background:#f8fafc}
+    .tab-content{display:none}
+    .tab-content.active{display:block}
+    
+    @media (max-width:768px){
+      .charts-container{grid-template-columns:1fr}
+      .chart-container{height:250px}
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Reporte de Performance - JPetStore</h1>
+    <p id="execution-info">Ejecución: <span id="execution-date">Cargando...</span> · Fuente: <span id="source-file">Cargando...</span></p>
+  </header>
+
+  <main class="container">
+    <div class="tabs">
+      <button class="tab active" onclick="showTab('summary')">Resumen</button>
+      <button class="tab" onclick="showTab('charts')">Gráficos</button>
+      <button class="tab" onclick="showTab('details')">Detalles</button>
+      <button class="tab" onclick="showTab('analysis')">Análisis</button>
+    </div>
+
+    <div id="summary" class="tab-content active">
+      <section class="card">
+        <h2>Resumen Ejecutivo</h2>
+        <div class="kpis">
+          <div class="kpi">
+            <h3>APDEX Global</h3>
+            <p id="apdex-score">0.000</p>
+            <div class="legend ok" id="apdex-label">Excelente</div>
+          </div>
+          <div class="kpi">
+            <h3>Requests Exitosas</h3>
+            <p id="success-rate">0%</p>
+            <div class="legend">% errores</div>
+          </div>
+          <div class="kpi">
+            <h3>Promedio de Respuesta</h3>
+            <p id="avg-response">0 ms</p>
+            <div class="legend">Objetivo: &lt; 500 ms</div>
+          </div>
+          <div class="kpi">
+            <h3>Throughput</h3>
+            <p id="throughput">0.00 req/s</p>
+            <div class="legend" id="total-samples">0 muestras</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Detalle por Endpoint <span class="badge">percentiles (95/99)</span></h2>
+        <table aria-label="Detalle por endpoint" id="endpoints-table">
+          <thead>
+            <tr>
+              <th>Endpoint</th>
+              <th>Promedio</th>
+              <th>95th</th>
+              <th>99th</th>
+              <th>Estado</th>
+            </tr>
+          </thead>
+          <tbody id="endpoints-tbody"></tbody>
+        </table>
+      </section>
+    </div>
+
+    <div id="charts" class="tab-content">
+      <section class="card">
+        <h2>Gráficos de Rendimiento</h2>
+        <div class="charts-container">
+          <div class="chart-card">
+            <div class="chart-title">Tiempo de Respuesta por Endpoint</div>
+            <div class="chart-container">
+              <canvas id="responseTimeChart"></canvas>
+            </div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">Throughput en el Tiempo</div>
+            <div class="chart-container">
+              <canvas id="throughputChart"></canvas>
+            </div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">Distribución de Tiempos de Respuesta</div>
+            <div class="chart-container">
+              <canvas id="responseDistributionChart"></canvas>
+            </div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">Errores por Endpoint</div>
+            <div class="chart-container">
+              <canvas id="errorsChart"></canvas>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div id="details" class="tab-content">
+      <section class="card">
+        <h2>Métricas Detalladas</h2>
+        <div class="charts-container">
+          <div class="chart-card">
+            <div class="chart-title">Tiempo de Respuesta vs Tiempo</div>
+            <div class="chart-container">
+              <canvas id="responseTimeOverTimeChart"></canvas>
+            </div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">Usuarios Concurrentes</div>
+            <div class="chart-container">
+              <canvas id="concurrentUsersChart"></canvas>
+            </div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">P95 vs Tiempo</div>
+            <div class="chart-container">
+              <canvas id="p95OverTimeChart"></canvas>
+            </div>
+          </div>
+          <div class="chart-card">
+            <div class="chart-title">P99 vs Tiempo</div>
+            <div class="chart-container">
+              <canvas id="p99OverTimeChart"></canvas>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div id="analysis" class="tab-content">
+      <section class="card">
+        <h2>Análisis y Recomendaciones</h2>
+        <ul>
+          <li>Monitorizar percentil 95 y 99 en endpoints más críticos.</li>
+          <li>Ajustar umbrales de APDEX según objetivos del negocio.</li>
+          <li>Revisar endpoints con estado "Optimizable" o "Crítico".</li>
+        </ul>
+      </section>
+    </div>
+  </main>
+
+  <footer>
+    Generado automáticamente a partir de resultados JMeter (.jtl)
+  </footer>
+
+  <script>
+    // __TEST_DATA__
+
+    function apdexLabel(apdex) {
+      if (apdex >= 0.94) return 'Excelente';
+      if (apdex >= 0.85) return 'Aceptable';
+      return 'Mejorable';
+    }
+
+    function showTab(tabName) {
+      document.querySelectorAll('.tab-content').forEach(tab => tab.classList.remove('active'));
+      document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
+      document.getElementById(tabName).classList.add('active');
+      event.target.classList.add('active');
+      if (tabName === 'charts' || tabName === 'details') setTimeout(createCharts, 100);
+    }
+
+    function loadData() {
+      const d = testData;
+      document.getElementById('execution-date').textContent = d.executionDate;
+      document.getElementById('source-file').textContent = d.sourceFile;
+      document.getElementById('apdex-score').textContent = d.apdex.toFixed(3);
+      document.getElementById('apdex-label').textContent = apdexLabel(d.apdex);
+      document.getElementById('success-rate').textContent = d.successRate.toFixed(1) + '%';
+      document.getElementById('avg-response').textContent = Math.round(d.avgResponse) + ' ms';
+      document.getElementById('throughput').textContent = d.throughput.toFixed(2) + ' req/s';
+      document.getElementById('total-samples').textContent = d.totalSamples + ' muestras';
+
+      const tbody = document.getElementById('endpoints-tbody');
+      tbody.innerHTML = '';
+      d.endpoints.forEach(endpoint => {
+        const row = document.createElement('tr');
+        const statusClass = endpoint.status === 'ok' ? 'ok' : endpoint.status === 'warn' ? 'warn' : 'danger';
+        const statusText = endpoint.status === 'ok' ? 'OK' : endpoint.status === 'warn' ? 'Optimizable' : 'Crítico';
+        row.innerHTML = `
+          <td>${endpoint.name}</td>
+          <td>${Math.round(endpoint.avg)} ms</td>
+          <td>${Math.round(endpoint.p95)} ms</td>
+          <td>${Math.round(endpoint.p99)} ms</td>
+          <td class="status ${statusClass}">${statusText}</td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+
+    function createCharts() {
+      const d = testData;
+      const responseTimeCtx = document.getElementById('responseTimeChart');
+      if (responseTimeCtx) {
+        new Chart(responseTimeCtx, {
+          type: 'bar',
+          data: {
+            labels: d.endpoints.map(e => e.name.split(' ')[0] + '...'),
+            datasets: [{
+              label: 'Promedio (ms)',
+              data: d.endpoints.map(e => e.avg),
+              backgroundColor: d.endpoints.map(e => e.status === 'ok' ? '#1a7f37' : e.status === 'warn' ? '#b7791f' : '#b91c1c'),
+              borderWidth: 1
+            }]
+          },
+          options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } }, plugins: { legend: { display: false } } }
+        });
+      }
+
+      const throughputCtx = document.getElementById('throughputChart');
+      if (throughputCtx) {
+        const labels = (d.timeSeries && d.timeSeries.labels && d.timeSeries.labels.length) ? d.timeSeries.labels : [];
+        const throughputData = (d.timeSeries && d.timeSeries.throughput && d.timeSeries.throughput.length) ? d.timeSeries.throughput : [];
+        new Chart(throughputCtx, { type: 'line', data: { labels, datasets: [{ label: 'Throughput (req/s)', data: throughputData, borderColor: '#2d6cdf', backgroundColor: 'rgba(45,108,223,.1)', fill: true, tension: .4 }] }, options: { responsive: true, maintainAspectRatio: false } });
+      }
+
+      // Detalles: Tiempo de respuesta vs tiempo
+      const rtOverTime = document.getElementById('responseTimeOverTimeChart');
+      if (rtOverTime && d.timeSeries && d.timeSeries.labels.length) {
+        new Chart(rtOverTime, { type: 'line', data: { labels: d.timeSeries.labels, datasets: [{ label: 'Avg (ms)', data: d.timeSeries.avgResponse, borderColor: '#1f4fbf', backgroundColor: 'rgba(31,79,191,.12)', fill: true, tension: .3 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, title: { display: true, text: 'ms' } } } } });
+      }
+
+      // Detalles: Usuarios concurrentes
+      const concUsers = document.getElementById('concurrentUsersChart');
+      if (concUsers && d.timeSeries && d.timeSeries.labels.length) {
+        new Chart(concUsers, { type: 'line', data: { labels: d.timeSeries.labels, datasets: [{ label: 'Usuarios', data: d.timeSeries.concurrentUsers, borderColor: '#16a34a', backgroundColor: 'rgba(22,163,74,.12)', fill: true, tension: .3 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } } });
+      }
+
+      // Detalles: P95 y P99 vs tiempo
+      const p95El = document.getElementById('p95OverTimeChart');
+      if (p95El && d.timeSeries && d.timeSeries.labels.length) {
+        new Chart(p95El, { type: 'line', data: { labels: d.timeSeries.labels, datasets: [{ label: 'P95 (ms)', data: (d.timeSeries.p95||[]), borderColor: '#b7791f', backgroundColor: 'rgba(183,121,31,.12)', fill: true, tension: .3 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } } });
+      }
+      const p99El = document.getElementById('p99OverTimeChart');
+      if (p99El && d.timeSeries && d.timeSeries.labels.length) {
+        new Chart(p99El, { type: 'line', data: { labels: d.timeSeries.labels, datasets: [{ label: 'P99 (ms)', data: (d.timeSeries.p99||[]), borderColor: '#b91c1c', backgroundColor: 'rgba(185,28,28,.12)', fill: true, tension: .3 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true } } } });
+      }
+
+      const distributionCtx = document.getElementById('responseDistributionChart');
+      if (distributionCtx) {
+        new Chart(distributionCtx, { type: 'doughnut', data: { labels: ['< 200ms','200-500ms','500-1000ms','> 1000ms'], datasets: [{ data: [45,35,15,5], backgroundColor: ['#1a7f37','#2d6cdf','#b7791f','#b91c1c'], borderWidth:2, borderColor:'#fff' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } } });
+      }
+
+      const errorsCtx = document.getElementById('errorsChart');
+      if (errorsCtx) {
+        new Chart(errorsCtx, { type: 'bar', data: { labels: d.endpoints.map(e => e.name.split(' ')[0] + '...'), datasets: [{ label: 'Errores (%)', data: new Array(d.endpoints.length).fill(0), backgroundColor: '#1a7f37' }] }, options: { responsive: true, maintainAspectRatio: false, scales: { y: { beginAtZero: true, max: 5 } } } });
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => { loadData(); });
+  </script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  jmeter-performance-tests:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: jpetstore-performance-tests
+    volumes:
+      - ../results:/app/results
+      - ../jpetstore_jmeter_testplan.jmx:/app/jpetstore_jmeter_testplan.jmx:ro
+    environment:
+      - JMETER_HOME=/opt/apache-jmeter-5.6.3
+      - TARGET_URL=https://petstore.octoperf.com
+      - TEST_DURATION=300
+      - CONCURRENT_USERS=10
+    networks:
+      - performance-network
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '1.0'
+        reservations:
+          memory: 1G
+          cpus: '0.5'
+
+  jmeter-reports:
+    image: nginx:alpine
+    container_name: jmeter-reports-server
+    ports:
+      - "8080:80"
+    volumes:
+      - ../results/report:/usr/share/nginx/html:ro
+    depends_on:
+      - jmeter-performance-tests
+    networks:
+      - performance-network
+    profiles:
+      - reports
+
+networks:
+  performance-network:
+    driver: bridge
+
+volumes:
+  results-data:
+    driver: local

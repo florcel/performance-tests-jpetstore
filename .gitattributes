@@ -1,0 +1,47 @@
+
+*.md text eol=lf
+*.txt text eol=lf
+*.sh text eol=lf
+*.bat text eol=crlf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.json text eol=lf
+*.xml text eol=lf
+*.properties text eol=lf
+
+*.gitignore text eol=lf
+*.gitattributes text eol=lf
+Dockerfile text eol=lf
+docker-compose.yml text eol=lf
+
+docs/*.md text eol=lf
+examples/*.sh text eol=lf
+
+*.jmx binary
+*.jtl binary
+*.log binary
+*.jar binary
+*.war binary
+*.ear binary
+*.zip binary
+*.tar.gz binary
+*.rar binary
+
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.svg binary
+*.ico binary
+
+.DS_Store binary
+Thumbs.db binary
+
+results/*.jtl -text
+results/report/* -text
+*.tmp -text
+*.log -text
+
+config/jmeter.properties -text
+*.env -text
+.env.local -text
