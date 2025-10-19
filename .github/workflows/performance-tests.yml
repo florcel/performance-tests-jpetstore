@@ -1,12 +1,6 @@
 name: Performance Tests
 
 on:
-  push:
-    branches: [ main, develop ]
-  pull_request:
-    branches: [ main ]
-  schedule:
-    - cron: '0 2 * * *'
   workflow_dispatch:
     inputs:
       users:
@@ -33,8 +27,8 @@ env:
 
 jobs:
   performance-tests:
-    runs-on: ubuntu-latest
-    
+    runs-on: [self-hosted, Windows, X64]
+
     strategy:
       matrix:
         test-scenario: [light, medium, heavy]
@@ -66,90 +60,80 @@ jobs:
           path: apache-jmeter-${{ env.JMETER_VERSION }}
           key: jmeter-${{ env.JMETER_VERSION }}
 
-      - name: Download JMeter
+      - name: Download JMeter (Windows)
         if: steps.cache.outputs.cache-hit != 'true'
+        shell: pwsh
         run: |
-          wget -q https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-${{ env.JMETER_VERSION }}.tgz
-          tar -xzf apache-jmeter-${{ env.JMETER_VERSION }}.tgz
-          rm apache-jmeter-${{ env.JMETER_VERSION }}.tgz
+          $ver = "${{ env.JMETER_VERSION }}"
+          $tgz = "apache-jmeter-$ver.tgz"
+          Invoke-WebRequest -Uri "https://archive.apache.org/dist/jmeter/binaries/$tgz" -OutFile $tgz
+          tar -xzf $tgz
+          Remove-Item $tgz
 
       - name: Create results directory
-        run: mkdir -p results
+        shell: pwsh
+        run: New-Item -ItemType Directory -Force -Path results | Out-Null
 
       - name: Run performance tests (${{ matrix.test-scenario }})
+        shell: pwsh
         run: |
-          ./apache-jmeter-${{ env.JMETER_VERSION }}/bin/jmeter \
-            -n \
-            -t jpetstore_jmeter_testplan.jmx \
-            -l results/results_${{ matrix.test-scenario }}.jtl \
-            -Jusers=${{ matrix.users }} \
-            -Jduration=${{ matrix.duration }} \
-            -Jtarget_url=${{ env.TARGET_URL }} \
+          $JMETER = ".\apache-jmeter-${{ env.JMETER_VERSION }}\bin\jmeter.bat"
+          & $JMETER -n `
+            -t "jpetstore_jmeter_testplan.jmx" `
+            -l "results\results_${{ matrix.test-scenario }}.jtl" `
+            -Jusers=${{ matrix.users }} `
+            -Jduration=${{ matrix.duration }} `
+            -Jtarget_url="${{ env.TARGET_URL }}" `
             -Jjmeter.save.saveservice.output_format=csv
 
       - name: Generate HTML report
+        shell: pwsh
         run: |
-          ./apache-jmeter-${{ env.JMETER_VERSION }}/bin/jmeter \
-            -g results/results_${{ matrix.test-scenario }}.jtl \
-            -o results/report_${{ matrix.test-scenario }}
+          $JMETER = ".\apache-jmeter-${{ env.JMETER_VERSION }}\bin\jmeter.bat"
+          & $JMETER -g "results\results_${{ matrix.test-scenario }}.jtl" -o "results\report_${{ matrix.test-scenario }}"
 
       - name: Extract key metrics
         id: metrics
+        shell: pwsh
         run: |
-          if [ -f "results/results_${{ matrix.test-scenario }}.jtl" ]; then
-            AVG_RESPONSE_TIME=$(tail -n +2 results/results_${{ matrix.test-scenario }}.jtl | \
-              awk -F',' '{sum+=$2; count++} END {if(count>0) print sum/count; else print 0}')
-            
-            ERROR_RATE=$(tail -n +2 results/results_${{ matrix.test-scenario }}.jtl | \
-              awk -F',' '{if($8=="false") errors++} END {if(NR>0) print (errors/NR)*100; else print 0}')
-            
-            THROUGHPUT=$(tail -n +2 results/results_${{ matrix.test-scenario }}.jtl | \
-              awk -F',' '{count++} END {if(count>0) print count/${{ matrix.duration }}; else print 0}')
-            
-            echo "avg_response_time=$AVG_RESPONSE_TIME" >> $GITHUB_OUTPUT
-            echo "error_rate=$ERROR_RATE" >> $GITHUB_OUTPUT
-            echo "throughput=$THROUGHPUT" >> $GITHUB_OUTPUT
-          else
-            echo "avg_response_time=0" >> $GITHUB_OUTPUT
-            echo "error_rate=100" >> $GITHUB_OUTPUT
-            echo "throughput=0" >> $GITHUB_OUTPUT
-          fi
+          $file = "results\results_${{ matrix.test-scenario }}.jtl"
+          if (Test-Path $file) {
+            $lines = Get-Content $file
+            if ($lines.Count -gt 1) {
+              $sum = 0.0; $count = 0; $errors = 0
+              foreach ($line in $lines | Select-Object -Skip 1) {
+                $cols = $line.Split(',')
+                if ($cols.Count -ge 8) {
+                  $sum += [double]$cols[1]
+                  $count++
+                  if ($cols[7].Trim().ToLower() -eq 'false') { $errors++ }
+                }
+              }
+              if ($count -gt 0) {
+                $avg = $sum / $count
+                $errorRate = 100.0 * $errors / $count
+                $throughput = $count / [double]${{ matrix.duration }}
+              } else { $avg=0; $errorRate=0; $throughput=0 }
+            } else { $avg=0; $errorRate=100; $throughput=0 }
+          } else { $avg=0; $errorRate=100; $throughput=0 }
+          "avg_response_time=$avg" >> $env:GITHUB_OUTPUT
+          "error_rate=$errorRate" >> $env:GITHUB_OUTPUT
+          "throughput=$throughput" >> $env:GITHUB_OUTPUT
 
       - name: Performance thresholds check
+        shell: pwsh
         run: |
-          AVG_RESPONSE_TIME=${{ steps.metrics.outputs.avg_response_time }}
-          ERROR_RATE=${{ steps.metrics.outputs.error_rate }}
-          
-          echo "🔍 Verificando umbrales de rendimiento para ${{ matrix.test-scenario }}:"
-          echo "  - Tiempo de respuesta promedio: ${AVG_RESPONSE_TIME}ms"
-          echo "  - Tasa de errores: ${ERROR_RATE}%"
-          
-          case "${{ matrix.test-scenario }}" in
-            "light")
-              MAX_RESPONSE_TIME=1000
-              MAX_ERROR_RATE=1
-              ;;
-            "medium")
-              MAX_RESPONSE_TIME=2000
-              MAX_ERROR_RATE=2
-              ;;
-            "heavy")
-              MAX_RESPONSE_TIME=5000
-              MAX_ERROR_RATE=5
-              ;;
-          esac
-          
-          if (( $(echo "$AVG_RESPONSE_TIME > $MAX_RESPONSE_TIME" | bc -l) )); then
-            echo "❌ FALLO: Tiempo de respuesta promedio (${AVG_RESPONSE_TIME}ms) excede el umbral (${MAX_RESPONSE_TIME}ms)"
-            exit 1
-          fi
-          
-          if (( $(echo "$ERROR_RATE > $MAX_ERROR_RATE" | bc -l) )); then
-            echo "❌ FALLO: Tasa de errores (${ERROR_RATE}%) excede el umbral (${MAX_ERROR_RATE}%)"
-            exit 1
-          fi
-          
-          echo "✅ Todos los umbrales de rendimiento cumplidos"
+          $avg = [double]"${{ steps.metrics.outputs.avg_response_time }}"
+          $err = [double]"${{ steps.metrics.outputs.error_rate }}"
+          switch ("${{ matrix.test-scenario }}") {
+            'light'  { $maxRt=1000; $maxErr=1 }
+            'medium' { $maxRt=2000; $maxErr=2 }
+            'heavy'  { $maxRt=5000; $maxErr=5 }
+          }
+          Write-Host "🔍 Verificando umbrales para ${{ matrix.test-scenario }}"
+          if ($avg -gt $maxRt) { Write-Error "❌ FALLO: Avg ${avg}ms > ${maxRt}ms"; exit 1 }
+          if ($err -gt $maxErr) { Write-Error "❌ FALLO: Error ${err}% > ${maxErr}%"; exit 1 }
+          Write-Host "✅ Umbrales OK"
 
       - name: Upload test results
         uses: actions/upload-artifact@v4
@@ -157,8 +141,8 @@ jobs:
         with:
           name: performance-results-${{ matrix.test-scenario }}
           path: |
-            results/results_${{ matrix.test-scenario }}.jtl
-            results/report_${{ matrix.test-scenario }}/
+            results\results_${{ matrix.test-scenario }}.jtl
+            results\report_${{ matrix.test-scenario }}\
           retention-days: 30
 
       - name: Comment PR with results
@@ -166,32 +150,22 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            // Publica un comentario con el resumen de resultados
             let comment = `## 📊 Resultados de Performance Tests - ${{ matrix.test-scenario }}\n\n`;
             comment += `**Configuración:**\n`;
             comment += `- Usuarios concurrentes: ${{ matrix.users }}\n`;
             comment += `- Duración: ${{ matrix.duration }}s\n`;
             comment += `- URL objetivo: ${{ env.TARGET_URL }}\n\n`;
-            
             comment += `**Métricas:**\n`;
             comment += `- ⏱️ Tiempo de respuesta promedio: ${{ steps.metrics.outputs.avg_response_time }}ms\n`;
             comment += `- ❌ Tasa de errores: ${{ steps.metrics.outputs.error_rate }}%\n`;
             comment += `- 📈 Throughput: ${{ steps.metrics.outputs.throughput }} TPS\n\n`;
-            
-            const avgResponseTime = parseFloat('${{ steps.metrics.outputs.avg_response_time }}');
-            const errorRate = parseFloat('${{ steps.metrics.outputs.error_rate }}');
-            
+            const avg = parseFloat('${{ steps.metrics.outputs.avg_response_time }}');
+            const err = parseFloat('${{ steps.metrics.outputs.error_rate }}');
             let status = '✅';
-            if (avgResponseTime > 2000 || errorRate > 2) {
-              status = '⚠️';
-            }
-            if (avgResponseTime > 5000 || errorRate > 5) {
-              status = '❌';
-            }
-            
+            if (avg > 2000 || err > 2) status = '⚠️';
+            if (avg > 5000 || err > 5) status = '❌';
             comment += `**Estado:** ${status}\n\n`;
             comment += `📁 [Ver reporte completo](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})`;
-            
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
@@ -200,10 +174,10 @@ jobs:
             });
 
   performance-summary:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Windows, X64]
     needs: performance-tests
     if: always()
-    
+
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
@@ -211,25 +185,23 @@ jobs:
           path: artifacts
 
       - name: Generate summary report
+        shell: pwsh
         run: |
-          echo "# 📊 Performance Tests Summary" > performance-summary.md
-          echo "" >> performance-summary.md
-          echo "## Test Results Overview" >> performance-summary.md
-          echo "" >> performance-summary.md
-          
-          for scenario in light medium heavy; do
-            if [ -d "artifacts/performance-results-$scenario" ]; then
-              echo "### $scenario Scenario" >> performance-summary.md
-              echo "" >> performance-summary.md
-              
-              if [ -f "artifacts/performance-results-$scenario/results_$scenario.jtl" ]; then
-                echo "✅ Test completed successfully" >> performance-summary.md
-              else
-                echo "❌ Test failed or no results found" >> performance-summary.md
-              fi
-              echo "" >> performance-summary.md
-            fi
-          done
+          Set-Content -Path performance-summary.md -Value "# 📊 Performance Tests Summary"
+          Add-Content -Path performance-summary.md -Value ""
+          Add-Content -Path performance-summary.md -Value "## Test Results Overview"
+          Add-Content -Path performance-summary.md -Value ""
+          foreach ($scenario in 'light','medium','heavy') {
+            $base = Join-Path artifacts ("performance-results-$scenario")
+            if (Test-Path $base) {
+              Add-Content performance-summary.md "### $scenario Scenario"
+              Add-Content performance-summary.md ""
+              $jtl = Join-Path $base ("results_${scenario}.jtl")
+              if (Test-Path $jtl) { Add-Content performance-summary.md "✅ Test completed successfully" }
+              else { Add-Content performance-summary.md "❌ Test failed or no results found" }
+              Add-Content performance-summary.md ""
+            }
+          }
 
       - name: Upload summary
         uses: actions/upload-artifact@v4
@@ -237,4 +209,3 @@ jobs:
           name: performance-summary
           path: performance-summary.md
           retention-days: 30
-
