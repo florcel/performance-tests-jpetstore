@@ -10,12 +10,12 @@ on:
   workflow_dispatch:
     inputs:
       users:
-        description: 'NÃºmero de usuarios concurrentes'
+        description: 'Número de usuarios concurrentes'
         required: false
         default: '10'
         type: string
       duration:
-        description: 'DuraciÃ³n de la prueba en segundos'
+        description: 'Duración de la prueba en segundos'
         required: false
         default: '300'
         type: string
@@ -50,156 +50,154 @@ jobs:
             duration: 600
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Java
-      uses: actions/setup-java@v4
-      with:
-        java-version: '11'
-        distribution: 'temurin'
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          java-version: '11'
+          distribution: 'temurin'
 
-    - name: Cache JMeter
-      uses: actions/cache@v3
-      with:
-        path: apache-jmeter-${{ env.JMETER_VERSION }}
-        key: jmeter-${{ env.JMETER_VERSION }}
+      - name: Cache JMeter
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: apache-jmeter-${{ env.JMETER_VERSION }}
+          key: jmeter-${{ env.JMETER_VERSION }}
 
-    - name: Download JMeter
-      if: steps.cache.outputs.cache-hit != 'true'
-      run: |
-        wget -q https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-${{ env.JMETER_VERSION }}.tgz
-        tar -xzf apache-jmeter-${{ env.JMETER_VERSION }}.tgz
-        rm apache-jmeter-${{ env.JMETER_VERSION }}.tgz
+      - name: Download JMeter
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          wget -q https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-${{ env.JMETER_VERSION }}.tgz
+          tar -xzf apache-jmeter-${{ env.JMETER_VERSION }}.tgz
+          rm apache-jmeter-${{ env.JMETER_VERSION }}.tgz
 
-    - name: Create results directory
-      run: mkdir -p results
+      - name: Create results directory
+        run: mkdir -p results
 
-    - name: Run performance tests (${{ matrix.test-scenario }})
-      run: |
-        ./apache-jmeter-${{ env.JMETER_VERSION }}/bin/jmeter \
-          -n \
-          -t jpetstore_jmeter_testplan.jmx \
-          -l results/results_${{ matrix.test-scenario }}.jtl \
-          -Jusers=${{ matrix.users }} \
-          -Jduration=${{ matrix.duration }} \
-          -Jtarget_url=${{ env.TARGET_URL }} \
-          -Jjmeter.save.saveservice.output_format=csv
+      - name: Run performance tests (${{ matrix.test-scenario }})
+        run: |
+          ./apache-jmeter-${{ env.JMETER_VERSION }}/bin/jmeter \
+            -n \
+            -t jpetstore_jmeter_testplan.jmx \
+            -l results/results_${{ matrix.test-scenario }}.jtl \
+            -Jusers=${{ matrix.users }} \
+            -Jduration=${{ matrix.duration }} \
+            -Jtarget_url=${{ env.TARGET_URL }} \
+            -Jjmeter.save.saveservice.output_format=csv
 
-    - name: Generate HTML report
-      run: |
-        ./apache-jmeter-${{ env.JMETER_VERSION }}/bin/jmeter \
-          -g results/results_${{ matrix.test-scenario }}.jtl \
-          -o results/report_${{ matrix.test-scenario }}
+      - name: Generate HTML report
+        run: |
+          ./apache-jmeter-${{ env.JMETER_VERSION }}/bin/jmeter \
+            -g results/results_${{ matrix.test-scenario }}.jtl \
+            -o results/report_${{ matrix.test-scenario }}
 
-    - name: Extract key metrics
-      id: metrics
-      run: |
-        if [ -f "results/results_${{ matrix.test-scenario }}.jtl" ]; then
-          AVG_RESPONSE_TIME=$(tail -n +2 results/results_${{ matrix.test-scenario }}.jtl | \
-            awk -F',' '{sum+=$2; count++} END {if(count>0) print sum/count; else print 0}')
+      - name: Extract key metrics
+        id: metrics
+        run: |
+          if [ -f "results/results_${{ matrix.test-scenario }}.jtl" ]; then
+            AVG_RESPONSE_TIME=$(tail -n +2 results/results_${{ matrix.test-scenario }}.jtl | \
+              awk -F',' '{sum+=$2; count++} END {if(count>0) print sum/count; else print 0}')
+            
+            ERROR_RATE=$(tail -n +2 results/results_${{ matrix.test-scenario }}.jtl | \
+              awk -F',' '{if($8=="false") errors++} END {if(NR>0) print (errors/NR)*100; else print 0}')
+            
+            THROUGHPUT=$(tail -n +2 results/results_${{ matrix.test-scenario }}.jtl | \
+              awk -F',' '{count++} END {if(count>0) print count/${{ matrix.duration }}; else print 0}')
+            
+            echo "avg_response_time=$AVG_RESPONSE_TIME" >> $GITHUB_OUTPUT
+            echo "error_rate=$ERROR_RATE" >> $GITHUB_OUTPUT
+            echo "throughput=$THROUGHPUT" >> $GITHUB_OUTPUT
+          else
+            echo "avg_response_time=0" >> $GITHUB_OUTPUT
+            echo "error_rate=100" >> $GITHUB_OUTPUT
+            echo "throughput=0" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Performance thresholds check
+        run: |
+          AVG_RESPONSE_TIME=${{ steps.metrics.outputs.avg_response_time }}
+          ERROR_RATE=${{ steps.metrics.outputs.error_rate }}
           
-          ERROR_RATE=$(tail -n +2 results/results_${{ matrix.test-scenario }}.jtl | \
-            awk -F',' '{if($8=="false") errors++} END {if(NR>0) print (errors/NR)*100; else print 0}')
+          echo "🔍 Verificando umbrales de rendimiento para ${{ matrix.test-scenario }}:"
+          echo "  - Tiempo de respuesta promedio: ${AVG_RESPONSE_TIME}ms"
+          echo "  - Tasa de errores: ${ERROR_RATE}%"
           
-          THROUGHPUT=$(tail -n +2 results/results_${{ matrix.test-scenario }}.jtl | \
-            awk -F',' '{count++} END {if(count>0) print count/${{ matrix.duration }}; else print 0}')
+          case "${{ matrix.test-scenario }}" in
+            "light")
+              MAX_RESPONSE_TIME=1000
+              MAX_ERROR_RATE=1
+              ;;
+            "medium")
+              MAX_RESPONSE_TIME=2000
+              MAX_ERROR_RATE=2
+              ;;
+            "heavy")
+              MAX_RESPONSE_TIME=5000
+              MAX_ERROR_RATE=5
+              ;;
+          esac
           
-          echo "avg_response_time=$AVG_RESPONSE_TIME" >> $GITHUB_OUTPUT
-          echo "error_rate=$ERROR_RATE" >> $GITHUB_OUTPUT
-          echo "throughput=$THROUGHPUT" >> $GITHUB_OUTPUT
-        else
-          echo "avg_response_time=0" >> $GITHUB_OUTPUT
-          echo "error_rate=100" >> $GITHUB_OUTPUT
-          echo "throughput=0" >> $GITHUB_OUTPUT
-        fi
+          if (( $(echo "$AVG_RESPONSE_TIME > $MAX_RESPONSE_TIME" | bc -l) )); then
+            echo "❌ FALLO: Tiempo de respuesta promedio (${AVG_RESPONSE_TIME}ms) excede el umbral (${MAX_RESPONSE_TIME}ms)"
+            exit 1
+          fi
+          
+          if (( $(echo "$ERROR_RATE > $MAX_ERROR_RATE" | bc -l) )); then
+            echo "❌ FALLO: Tasa de errores (${ERROR_RATE}%) excede el umbral (${MAX_ERROR_RATE}%)"
+            exit 1
+          fi
+          
+          echo "✅ Todos los umbrales de rendimiento cumplidos"
 
-    - name: Performance thresholds check
-      run: |
-        AVG_RESPONSE_TIME=${{ steps.metrics.outputs.avg_response_time }}
-        ERROR_RATE=${{ steps.metrics.outputs.error_rate }}
-        
-        echo "ðŸ” Verificando umbrales de rendimiento para ${{ matrix.test-scenario }}:"
-        echo "  - Tiempo de respuesta promedio: ${AVG_RESPONSE_TIME}ms"
-        echo "  - Tasa de errores: ${ERROR_RATE}%"
-        
-        case "${{ matrix.test-scenario }}" in
-          "light")
-            MAX_RESPONSE_TIME=1000
-            MAX_ERROR_RATE=1
-            ;;
-          "medium")
-            MAX_RESPONSE_TIME=2000
-            MAX_ERROR_RATE=2
-            ;;
-          "heavy")
-            MAX_RESPONSE_TIME=5000
-            MAX_ERROR_RATE=5
-            ;;
-        esac
-        
-        if (( $(echo "$AVG_RESPONSE_TIME > $MAX_RESPONSE_TIME" | bc -l) )); then
-          echo "âŒ FALLO: Tiempo de respuesta promedio (${AVG_RESPONSE_TIME}ms) excede el umbral (${MAX_RESPONSE_TIME}ms)"
-          exit 1
-        fi
-        
-        if (( $(echo "$ERROR_RATE > $MAX_ERROR_RATE" | bc -l) )); then
-          echo "âŒ FALLO: Tasa de errores (${ERROR_RATE}%) excede el umbral (${MAX_ERROR_RATE}%)"
-          exit 1
-        fi
-        
-        echo "âœ… Todos los umbrales de rendimiento cumplidos"
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: performance-results-${{ matrix.test-scenario }}
+          path: |
+            results/results_${{ matrix.test-scenario }}.jtl
+            results/report_${{ matrix.test-scenario }}/
+          retention-days: 30
 
-    - name: Upload test results
-      uses: actions/upload-artifact@v3
-      if: always()
-      with:
-        name: performance-results-${{ matrix.test-scenario }}
-        path: |
-          results/results_${{ matrix.test-scenario }}.jtl
-          results/report_${{ matrix.test-scenario }}/
-        retention-days: 30
-
-    - name: Comment PR with results
-      if: github.event_name == 'pull_request'
-      uses: actions/github-script@v6
-      with:
-        script: |
-          const fs = require('fs');
-          
-          // Leer mÃ©tricas del archivo de resultados
-          let comment = `## ðŸ“Š Resultados de Performance Tests - ${{ matrix.test-scenario }}\n\n`;
-          comment += `**ConfiguraciÃ³n:**\n`;
-          comment += `- Usuarios concurrentes: ${{ matrix.users }}\n`;
-          comment += `- DuraciÃ³n: ${{ matrix.duration }}s\n`;
-          comment += `- URL objetivo: ${{ env.TARGET_URL }}\n\n`;
-          
-          comment += `**MÃ©tricas:**\n`;
-          comment += `- â±ï¸ Tiempo de respuesta promedio: ${{ steps.metrics.outputs.avg_response_time }}ms\n`;
-          comment += `- âŒ Tasa de errores: ${{ steps.metrics.outputs.error_rate }}%\n`;
-          comment += `- ðŸ“ˆ Throughput: ${{ steps.metrics.outputs.throughput }} TPS\n\n`;
-          
-          // Verificar umbrales
-          const avgResponseTime = parseFloat('${{ steps.metrics.outputs.avg_response_time }}');
-          const errorRate = parseFloat('${{ steps.metrics.outputs.error_rate }}');
-          
-          let status = 'âœ…';
-          if (avgResponseTime > 2000 || errorRate > 2) {
-            status = 'âš ï¸';
-          }
-          if (avgResponseTime > 5000 || errorRate > 5) {
-            status = 'âŒ';
-          }
-          
-          comment += `**Estado:** ${status}\n\n`;
-          comment += `ðŸ“ [Ver reporte completo](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})`;
-          
-          github.rest.issues.createComment({
-            issue_number: context.issue.number,
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            body: comment
-          });
+      - name: Comment PR with results
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Publica un comentario con el resumen de resultados
+            let comment = `## 📊 Resultados de Performance Tests - ${{ matrix.test-scenario }}\n\n`;
+            comment += `**Configuración:**\n`;
+            comment += `- Usuarios concurrentes: ${{ matrix.users }}\n`;
+            comment += `- Duración: ${{ matrix.duration }}s\n`;
+            comment += `- URL objetivo: ${{ env.TARGET_URL }}\n\n`;
+            
+            comment += `**Métricas:**\n`;
+            comment += `- ⏱️ Tiempo de respuesta promedio: ${{ steps.metrics.outputs.avg_response_time }}ms\n`;
+            comment += `- ❌ Tasa de errores: ${{ steps.metrics.outputs.error_rate }}%\n`;
+            comment += `- 📈 Throughput: ${{ steps.metrics.outputs.throughput }} TPS\n\n`;
+            
+            const avgResponseTime = parseFloat('${{ steps.metrics.outputs.avg_response_time }}');
+            const errorRate = parseFloat('${{ steps.metrics.outputs.error_rate }}');
+            
+            let status = '✅';
+            if (avgResponseTime > 2000 || errorRate > 2) {
+              status = '⚠️';
+            }
+            if (avgResponseTime > 5000 || errorRate > 5) {
+              status = '❌';
+            }
+            
+            comment += `**Estado:** ${status}\n\n`;
+            comment += `📁 [Ver reporte completo](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})`;
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
 
   performance-summary:
     runs-on: ubuntu-latest
@@ -207,35 +205,36 @@ jobs:
     if: always()
     
     steps:
-    - name: Download all artifacts
-      uses: actions/download-artifact@v3
-      with:
-        path: artifacts
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
 
-    - name: Generate summary report
-      run: |
-        echo "# ðŸ“Š Performance Tests Summary" > performance-summary.md
-        echo "" >> performance-summary.md
-        echo "## Test Results Overview" >> performance-summary.md
-        echo "" >> performance-summary.md
-        
-        for scenario in light medium heavy; do
-          if [ -d "artifacts/performance-results-$scenario" ]; then
-            echo "### $scenario Scenario" >> performance-summary.md
-            echo "" >> performance-summary.md
-            
-            if [ -f "artifacts/performance-results-$scenario/results_$scenario.jtl" ]; then
-              echo "âœ… Test completed successfully" >> performance-summary.md
-            else
-              echo "âŒ Test failed or no results found" >> performance-summary.md
+      - name: Generate summary report
+        run: |
+          echo "# 📊 Performance Tests Summary" > performance-summary.md
+          echo "" >> performance-summary.md
+          echo "## Test Results Overview" >> performance-summary.md
+          echo "" >> performance-summary.md
+          
+          for scenario in light medium heavy; do
+            if [ -d "artifacts/performance-results-$scenario" ]; then
+              echo "### $scenario Scenario" >> performance-summary.md
+              echo "" >> performance-summary.md
+              
+              if [ -f "artifacts/performance-results-$scenario/results_$scenario.jtl" ]; then
+                echo "✅ Test completed successfully" >> performance-summary.md
+              else
+                echo "❌ Test failed or no results found" >> performance-summary.md
+              fi
+              echo "" >> performance-summary.md
             fi
-            echo "" >> performance-summary.md
-          fi
-        done
+          done
 
-    - name: Upload summary
-      uses: actions/upload-artifact@v3
-      with:
-        name: performance-summary
-        path: performance-summary.md
-        retention-days: 30
+      - name: Upload summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-summary
+          path: performance-summary.md
+          retention-days: 30
+
