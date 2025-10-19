@@ -4,8 +4,8 @@ setlocal enabledelayedexpansion
 if "%JMETER_HOME%"=="" set JMETER_HOME=C:\apache-jmeter-5.6.3
 set "SCRIPT_DIR=%~dp0"
 for %%I in ("%SCRIPT_DIR%..\..") do set "ROOT=%%~fI"
-set "TEST_PLAN=%ROOT%\test-plans\api-performance-tests.jmx"
-set "RESULTS_DIR=%ROOT%\results\api-tests"
+set "TEST_PLAN=%ROOT%\test-plans\stress-tests.jmx"
+set "RESULTS_DIR=%ROOT%\results\stress-tests"
 set BASE_HOST=petstore.octoperf.com
 set BASE_SCHEME=https
 set USERS=100
@@ -44,9 +44,10 @@ if not exist "%TEST_PLAN%" (
 
 for /f "tokens=2 delims==" %%a in ('wmic OS Get localdatetime /value') do set "dt=%%a"
 set "TIMESTAMP=%dt:~0,8%_%dt:~8,6%"
-set RESULTS=%RESULTS_DIR%\api_stress_%TIMESTAMP%.jtl
-set REPORT_DIR=%RESULTS_DIR%\api_report_%TIMESTAMP%
-set HTML_NAME=STRESS(%TIMESTAMP%).html
+set RESULTS=%RESULTS_DIR%\stress_%TIMESTAMP%.jtl
+set REPORT_DIR=%RESULTS_DIR%\stress_report_%TIMESTAMP%
+set HTML_NAME=stress(%TIMESTAMP%).html
+set FINAL_HTML=%RESULTS_DIR%\%HTML_NAME%
 
 if not exist "%RESULTS_DIR%" mkdir "%RESULTS_DIR%"
 if not exist "%REPORT_DIR%" mkdir "%REPORT_DIR%"
@@ -86,8 +87,14 @@ if errorlevel 1 (
   echo [WARN] No se pudo aplicar el formato personalizado; quedara el dashboard estandar de JMeter
 )
 
-echo [SUCCESS] Reporte listo: %REPORT_DIR%\%HTML_NAME%
-start "" "%REPORT_DIR%\%HTML_NAME%"
+if not exist "%REPORT_DIR%\%HTML_NAME%" (
+  set "HTML_SRC=%REPORT_DIR%\index.html"
+) else (
+  set "HTML_SRC=%REPORT_DIR%\%HTML_NAME%"
+)
+copy /Y "%HTML_SRC%" "%FINAL_HTML%" >nul 2>nul
+echo [SUCCESS] Reporte listo: %FINAL_HTML%
+start "" "%FINAL_HTML%"
 exit /b 0
 
 :show_help

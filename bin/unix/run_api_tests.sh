@@ -16,7 +16,8 @@ RESULTS_DIR="$ROOT/results/api-tests"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 RESULTS_FILE="${RESULTS_DIR}/api_results_${TIMESTAMP}.jtl"
 REPORT_DIR="${RESULTS_DIR}/api_report_${TIMESTAMP}"
-HTML_NAME="API(${TIMESTAMP}).html"
+HTML_NAME="api(${TIMESTAMP}).html"
+FINAL_HTML="${RESULTS_DIR}/api(${TIMESTAMP}).html"
 
 USERS=${USERS:-20}
 RAMPUP=${RAMPUP:-60}
@@ -66,5 +67,6 @@ if command -v python3 >/dev/null 2>&1; then
   python3 "$ROOT/scripts/generate_enhanced_report.py" "$RESULTS_FILE" -o "$REPORT_DIR/$HTML_NAME" -v || warning "No se pudo aplicar el formato personalizado"
 fi
 
-success "Reporte: $REPORT_DIR/$HTML_NAME"
-echo "Para abrir: open $REPORT_DIR/$HTML_NAME"
+src="$REPORT_DIR/$HTML_NAME"; [ ! -f "$src" ] && src="$REPORT_DIR/index.html"; cp -f "$src" "$FINAL_HTML" 2>/dev/null || true
+success "Reporte: $FINAL_HTML"
+echo "Para abrir: open $FINAL_HTML"

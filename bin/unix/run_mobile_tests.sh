@@ -11,14 +11,16 @@ RESULTS_DIR="$ROOT/results/mobile-tests"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 RESULTS_FILE="${RESULTS_DIR}/mobile_${TIMESTAMP}.jtl"
 REPORT_DIR="${RESULTS_DIR}/report_${TIMESTAMP}"
-HTML_NAME="MOBILE(${TIMESTAMP}).html"
+HTML_NAME="mobile(${TIMESTAMP}).html"
+FINAL_HTML="${RESULTS_DIR}/mobile(${TIMESTAMP}).html"
 
 mkdir -p "$RESULTS_DIR" "$REPORT_DIR"
 "$JMETER_HOME/bin/jmeter" -n -t "$TEST_PLAN" -l "$RESULTS_FILE" -JBASE_HOST=petstore.octoperf.com -JBASE_SCHEME=https
 "$JMETER_HOME/bin/jmeter" -g "$RESULTS_FILE" -o "$REPORT_DIR"
 
 python3 "$ROOT/scripts/generate_enhanced_report.py" "$RESULTS_FILE" -o "$REPORT_DIR/$HTML_NAME" -v || true
-echo "Reporte mobile: $REPORT_DIR/$HTML_NAME"
+src="$REPORT_DIR/$HTML_NAME"; [ ! -f "$src" ] && src="$REPORT_DIR/index.html"; cp -f "$src" "$FINAL_HTML" 2>/dev/null || true
+echo "Reporte mobile: $FINAL_HTML"
 #!/bin/bash
 set -e
 
@@ -61,4 +63,3 @@ mkdir -p "$RESULTS_DIR" "$REPORT_DIR"
 
 python3 "$ROOT/scripts/generate_enhanced_report.py" "$RESULTS_FILE" -o "$REPORT_DIR/$HTML_NAME" -v || true
 echo "Reporte mobile: $REPORT_DIR/$HTML_NAME"
-

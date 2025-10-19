@@ -11,7 +11,8 @@ for /f "tokens=2 delims==" %%a in ('wmic OS Get localdatetime /value') do set "d
 set "TIMESTAMP=%dt:~0,8%_%dt:~8,6%"
 set RESULTS=%RESULTS_DIR%\mobile_%TIMESTAMP%.jtl
 set REPORT_DIR=%RESULTS_DIR%\report_%TIMESTAMP%
-set HTML_NAME=MOBILE(%TIMESTAMP%).html
+set HTML_NAME=mobile(%TIMESTAMP%).html
+set FINAL_HTML=%RESULTS_DIR%\%HTML_NAME%
 
 if not exist "%RESULTS_DIR%" mkdir "%RESULTS_DIR%"
 if not exist "%REPORT_DIR%" mkdir "%REPORT_DIR%"
@@ -50,8 +51,14 @@ where python >nul 2>nul && (
   py -3 "%ROOT%\scripts\generate_enhanced_report.py" "%RESULTS%" -o "%REPORT_DIR%\%HTML_NAME%" -v
 )
 
-echo Reporte movil listo: "%REPORT_DIR%\%HTML_NAME%"
-start "" "%REPORT_DIR%\%HTML_NAME%"
+if not exist "%REPORT_DIR%\%HTML_NAME%" (
+  set "HTML_SRC=%REPORT_DIR%\index.html"
+) else (
+  set "HTML_SRC=%REPORT_DIR%\%HTML_NAME%"
+)
+copy /Y "%HTML_SRC%" "%FINAL_HTML%" >nul 2>nul
+echo Reporte movil listo: "%FINAL_HTML%"
+start "" "%FINAL_HTML%"
 endlocal
 
 

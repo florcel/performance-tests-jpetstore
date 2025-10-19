@@ -47,7 +47,8 @@ for /f "tokens=2 delims==" %%a in ('wmic OS Get localdatetime /value') do set "d
 set "TIMESTAMP=%dt:~0,8%_%dt:~8,6%"
 set RESULTS=%RESULTS_DIR%\api_results_%TIMESTAMP%.jtl
 set REPORT_DIR=%RESULTS_DIR%\api_report_%TIMESTAMP%
-set HTML_NAME=API(%TIMESTAMP%).html
+set HTML_NAME=api(%TIMESTAMP%).html
+set FINAL_HTML=%RESULTS_DIR%\%HTML_NAME%
 
 if not exist "%RESULTS_DIR%" mkdir "%RESULTS_DIR%"
 if not exist "%REPORT_DIR%" mkdir "%REPORT_DIR%"
@@ -82,6 +83,12 @@ if errorlevel 1 (
   echo [WARN] No se pudo aplicar el formato personalizado; quedara el dashboard estandar de JMeter
 )
 
-echo [SUCCESS] Reporte listo: %REPORT_DIR%\%HTML_NAME%
-start "" "%REPORT_DIR%\%HTML_NAME%"
+if not exist "%REPORT_DIR%\%HTML_NAME%" (
+  set "HTML_SRC=%REPORT_DIR%\index.html"
+) else (
+  set "HTML_SRC=%REPORT_DIR%\%HTML_NAME%"
+)
+copy /Y "%HTML_SRC%" "%FINAL_HTML%" >nul 2>nul
+echo [SUCCESS] Reporte listo: %FINAL_HTML%
+start "" "%FINAL_HTML%"
 exit /b 0
